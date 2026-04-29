@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  githubId      String?      @unique
+  payoutEmail   String?
+  createdAt     DateTime     @default(now())
+
+  accounts      Account[]
+  sessions      Session[]
+  tools         Tool[]
+  earnings      Earning[]
+  withdrawals   Withdrawal[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Tool {
+  id            String       @id @default(cuid())
+  creatorId     String
+  name          String
+  slug          String       @unique
+  description   String       @db.Text
+  category      ToolCategory
+  systemPrompt  String       @db.Text
+  inputSchema   Json
+  priceUsdc     Float
+  isPublished   Boolean      @default(false)
+  runCount      Int          @default(0)
+  exampleOutput String?      @db.Text
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  creator       User         @relation(fields: [creatorId], references: [id])
+  runs          Run[]
+}
+
+enum ToolCategory {
+  WRITING
+  LEGAL
+  CODE
+  BUSINESS
+  RESEARCH
+  FINANCE
+}
+
+model Run {
+  id             String    @id @default(cuid())
+  toolId         String
+  locusSessionId String    @unique
+  webhookSecret  String    @db.Text
+  inputData      Json
+  result         String?   @db.Text
+  status         RunStatus @default(PENDING)
+  payerAddress   String?
+  txHash         String?
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  tool           Tool      @relation(fields: [toolId], references: [id])
+  earning        Earning?
+}
+
+enum RunStatus {
+  PENDING
+  PAID
+  COMPLETED
+  FAILED
+}
+
+model Earning {
+  id           String        @id @default(cuid())
+  creatorId    String
+  runId        String        @unique
+  amountUsdc   Float
+  status       EarningStatus @default(PENDING)
+  withdrawalId String?
+  createdAt    DateTime      @default(now())
+
+  creator      User          @relation(fields: [creatorId], references: [id])
+  run          Run           @relation(fields: [runId], references: [id])
+  withdrawal   Withdrawal?   @relation(fields: [withdrawalId], references: [id])
+}
+
+enum EarningStatus {
+  PENDING
+  WITHDRAWN
+  FAILED
+}
+
+model Withdrawal {
+  id                 String           @id @default(cuid())
+  creatorId          String
+  totalAmountUsdc    Float
+  payoutEmail        String
+  locusTransactionId String?
+  status             WithdrawalStatus @default(PROCESSING)
+  createdAt          DateTime         @default(now())
+
+  creator            User             @relation(fields: [creatorId], references: [id])
+  earnings           Earning[]
+}
+
+enum WithdrawalStatus {
+  PROCESSING
+  SENT
+  FAILED
+}
